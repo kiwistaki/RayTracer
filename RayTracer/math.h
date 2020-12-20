@@ -1,5 +1,4 @@
-#ifndef VEC3_H
-#define VEC3_H
+#pragma once
 
 #include <cmath>
 #include <iostream>
@@ -7,7 +6,40 @@
 
 using std::sqrt;
 
-class vec3 {
+static constexpr float PI = 3.1415926535897932385f;
+
+/**
+* Taken from https://www.iquilezles.org/www/articles/sfrand/sfrand.htm
+*/
+inline float frand(int* seed)
+{
+    union
+    {
+        float fres;
+        unsigned int ires;
+    };
+
+    seed[0] *= 16807;
+    ires = ((((unsigned int)seed[0]) >> 9) | 0x3f800000);
+    return fres - 1.0f;
+}
+
+/**
+* Produce a random floating point number between 0.0f and 1.0f
+*/
+inline float randf()
+{
+    static int seed = 13575;
+    return frand(&seed);
+}
+
+inline float randf(float min, float max)
+{
+    return min + (max - min) * randf();
+}
+
+class vec3
+{
 public:
     vec3() : e{ 0,0,0 } {}
     vec3(float e0, float e1, float e2) : e{ e0, e1, e2 } {}
@@ -46,10 +78,18 @@ public:
         return e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
     }
 
+    inline static vec3 random()
+    {
+        return vec3(randf(), randf(), randf());
+    }
+    inline static vec3 random(float min, float max)
+    {
+        return vec3(randf(min, max), randf(min, max), randf(min, max));
+    }
+
 public:
     float e[3];
 };
-#endif
 
 // vec3 Utility Functions
 inline std::ostream& operator<<(std::ostream& out, const vec3& v)
@@ -106,30 +146,21 @@ inline vec3 normalize(vec3 v)
     return v / v.length();
 }
 
-
-/**
-* Taken from https://www.iquilezles.org/www/articles/sfrand/sfrand.htm
-*/
-inline float frand(int* seed)
+inline vec3 reflect(const vec3 direction, const vec3 normal)
 {
-    union
-    {
-        float fres;
-        unsigned int ires;
-    };
-
-    seed[0] *= 16807;
-    ires = ((((unsigned int)seed[0]) >> 9) | 0x3f800000);
-    return fres - 1.0f;
+    return	direction - 2.0f * dot(direction, normal) * normal;
 }
 
-/**
-* Produce a random floating point number between 0.0f and 1.0f
-*/
-inline float randf()
+static bool refract(const vec3& i, const vec3& n, float ni, float nt, vec3& refracted)
 {
-    static int seed = 13575;
-    return frand(&seed);
+    const vec3 ui = normalize(i);
+    const float dt = dot(i, n);
+    const float niOverNt = ni / nt;
+    float d = 1.0f - niOverNt * niOverNt * (1.0f - dt * dt);
+    const bool isRefracted = d > 0.0f;
+    if (isRefracted)
+        refracted = niOverNt * (ui - n * dt) - n * sqrtf(d);
+    return isRefracted;
 }
 
 /**

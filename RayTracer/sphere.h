@@ -18,26 +18,30 @@ public:
 
 	bool hitTest(const Ray& ray, float tmin, float tmax, HitRecord& hitRecord) const override
 	{
-		const vec3 oc = ray.origin() - mCenter;
-		const float a = dot(ray.direction(), ray.direction());
-		const float b = 2.0f * dot(oc, ray.direction());
-		const float c = dot(oc, oc) - mRadius * mRadius;
-		const float discriminant = b * b - 4.0f * a * c;
-		if (discriminant > 0.0f)
-		{
-			const float t1 = (-b - sqrtf(discriminant)) / (2.0f * a);
-			const float t2 = (-b + sqrtf(discriminant)) / (2.0f * a);
-			if (t1 > tmin && t1 < tmax)
-				hitRecord.t = t1;
-			else if (t2 > tmin && t2 < tmax)
-				hitRecord.t = t2;
-			else
-				return false; // no acceptable solution
-			hitRecord.intersectionPoint = ray.pointAt(hitRecord.t);
-			hitRecord.normal = (hitRecord.intersectionPoint - mCenter) / mRadius;
-			hitRecord.material = mMaterial;
-		}
-		return (discriminant > 0.0f);
+        vec3 oc = ray.origin() - mCenter;
+        auto a = ray.direction().lengthSquared();
+        auto halfB = dot(oc, ray.direction());
+        auto c = oc.lengthSquared() - mRadius * mRadius;
+
+        auto discriminant = halfB * halfB - a * c;
+        if (discriminant < 0) return false;
+        auto sqrtd = sqrt(discriminant);
+
+        // Find the nearest root that lies in the acceptable range.
+        auto root = (-halfB - sqrtd) / a;
+        if (root < tmin || tmax < root) {
+            root = (-halfB + sqrtd) / a;
+            if (root < tmin || tmax < root)
+                return false;
+        }
+
+        hitRecord.t = root;
+        hitRecord.intersectionPoint = ray.pointAt(hitRecord.t);
+        vec3 outwardNormal = (hitRecord.intersectionPoint - mCenter) / mRadius;
+        hitRecord.setFaceNormal(ray, outwardNormal);
+        hitRecord.material = mMaterial;
+
+        return true;
 	}
 
 private:

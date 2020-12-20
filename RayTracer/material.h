@@ -18,9 +18,12 @@ public:
 
 	virtual bool scatter(const Ray& in, const HitRecord& rec, vec3& attn, Ray& scattered) const override
 	{
-		const vec3 target = rec.intersectionPoint + rec.normal + randomInUnitSphere();
+		auto target = rec.normal + randomInUnitSphere();
+		if (target.nearZero())
+			target = rec.normal;
+
+		scattered = Ray(rec.intersectionPoint, target);
 		attn = mAlbedo;
-		scattered = Ray(rec.intersectionPoint, target - rec.intersectionPoint);
 		return true;
 	}
 
@@ -36,10 +39,10 @@ public:
 
 	bool scatter(const Ray& in, const HitRecord& rec, vec3& attn, Ray& scattered) const override
 	{
-		const vec3 reflectDir = reflect(in.direction(), rec.normal) + randomInUnitSphere() * mRoughness;
-		scattered = Ray(rec.intersectionPoint, reflectDir);
+		const vec3 reflectDir = reflect(normalize(in.direction()), rec.normal);
+		scattered = Ray(rec.intersectionPoint, reflectDir + randomInUnitSphere() * mRoughness);
 		attn = mAttn;
-		return true;
+		return (dot(scattered.direction(), rec.normal) > 0);
 	}
 
 private:
@@ -56,29 +59,21 @@ public:
 	bool scatter(const Ray& in, const HitRecord& rec, vec3& attn, Ray& scattered) const override
 	{
 		attn = vec3{ 1.0f,1.0f,1.0f };
-		vec3 refractedDir;
-		bool isRefracted = false;
-		const vec3& i = in.direction();
-		const vec3& n = rec.normal;
-		float reflProb = 1.0f;
-		float cosine = 0.0f;
+		float refractionRatio = rec.frontFace ? (1.0f / mRefractionIndex) : mRefractionIndex;
 
-		if (dot(n, i) > 0.0f) //ray exiting the dielectric material
-		{
-			isRefracted = refract(i, -n, mRefractionIndex, 1.0f, refractedDir);
-			cosine = mRefractionIndex * dot(i, n) / i.length();
-		}
-		else //ray entering the dielectric material
-		{
-			isRefracted = refract(i, n, 1.0f, mRefractionIndex, refractedDir);
-			cosine = -dot(i, n) / i.length();
-		}
-		if (isRefracted)
-		{
-			reflProb = schlick(cosine, mRefractionIndex);
-		}
+		vec3 unitDirection = normalize(in.direction());
+		float cosTheta = fmin(dot(-unitDirection, rec.normal), 1.0f);
+		float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
 
-		scattered = Ray(rec.intersectionPoint, randf() < reflProb ? reflect(i, n) : refractedDir);
+		bool cannotRefract = refractionRatio * sinTheta > 1.0f;
+		vec3 direction;
+
+		if (cannotRefract || schlick(cosTheta, refractionRatio) > randf())
+			direction = reflect(unitDirection, rec.normal);
+		else
+			direction = refract(unitDirection, rec.normal, refractionRatio);
+
+		scattered = Ray(rec.intersectionPoint, direction);
 		return true;
 	}
 

@@ -2,11 +2,18 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <random>
 
 using std::sqrt;
 
 static constexpr float PI = 3.1415926535897932385f;
+static constexpr float INF = std::numeric_limits<float>::infinity();
+
+inline float degreesToRadians(float degrees)
+{
+    return degrees * PI / 180.0f;
+}
 
 /**
 * Taken from https://www.iquilezles.org/www/articles/sfrand/sfrand.htm
@@ -78,10 +85,18 @@ public:
         return e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
     }
 
+    bool nearZero() const 
+    {
+        // Return true if the vector is close to zero in all dimensions.
+        const auto s = 1e-8;
+        return (fabs(e[0]) < s) && (fabs(e[1]) < s) && (fabs(e[2]) < s);
+    }
+
     inline static vec3 random()
     {
         return vec3(randf(), randf(), randf());
     }
+
     inline static vec3 random(float min, float max)
     {
         return vec3(randf(min, max), randf(min, max), randf(min, max));
@@ -151,16 +166,22 @@ inline vec3 reflect(const vec3 direction, const vec3 normal)
     return	direction - 2.0f * dot(direction, normal) * normal;
 }
 
-static bool refract(const vec3& i, const vec3& n, float ni, float nt, vec3& refracted)
+inline vec3 refract(const vec3& i, const vec3& n, float ni)
 {
-    const vec3 ui = normalize(i);
-    const float dt = dot(i, n);
-    const float niOverNt = ni / nt;
-    float d = 1.0f - niOverNt * niOverNt * (1.0f - dt * dt);
-    const bool isRefracted = d > 0.0f;
-    if (isRefracted)
-        refracted = niOverNt * (ui - n * dt) - n * sqrtf(d);
-    return isRefracted;
+    auto cosTheta = fmin(dot(-i, n), 1.0f);
+    vec3 rPerp = ni * (i + cosTheta * n);
+    vec3 rParallel = -sqrt(fabs(1.0f - rPerp.lengthSquared())) * n;
+    return rPerp + rParallel;
+}
+
+inline vec3 randomInUnitDisk()
+{
+    while (true)
+    {
+        auto p = vec3(randf(-1.0f, 1.0f), randf(-1.0f, 1.0f), 0.0f);
+        if (p.lengthSquared() >= 1.0f) continue;
+        return p;
+    }
 }
 
 /**

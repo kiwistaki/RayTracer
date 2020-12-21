@@ -40,6 +40,11 @@ inline float randf()
     return frand(&seed);
 }
 
+inline float randf(int seed)
+{
+    return frand(&seed);
+}
+
 inline float randf(float min, float max)
 {
     return min + (max - min) * randf();

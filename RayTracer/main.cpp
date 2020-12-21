@@ -9,6 +9,9 @@
 #include "hittableList.h"
 #include "sphere.h"
 
+#include <thread>
+#include <functional>
+
 /**
 * Cast a ray into the scene and determine color
 */
@@ -83,13 +86,58 @@ HittableList randomScene()
 	return world;
 }
 
+void singleThreadLoop(std::vector<vec3>& buffer, const Camera& cam, const HittableList& world,
+	const int w, const int h, const int samples, const int bounces, const int numThread, const int threadId)
+{
+	for (int row = h - threadId - 1; row >=0; row -= numThread)
+	{
+		for (int col = 0; col < w; ++col)
+		{
+			vec3 c{ 0.0f, 0.0f, 0.0f };
+			for (int s = 0; s < samples; ++s)
+			{
+				const float u = ((float)col + randf()) / (float)(w);
+				const float v = ((float)row + randf()) / (float)(h);
+				c += color(cam.getRay(u, v), world, bounces);
+			}
+			c /= (float)samples;
+			buffer[row * w + col] = vec3(
+				(255.99f * sqrt(c.x())),
+				(255.99f * sqrt(c.y())),
+				(255.99f * sqrt(c.z())));
+		}
+	}
+}
+
+void multiThreadLoop(std::vector<vec3>& buffer, const Camera& cam, const HittableList& world,
+	const int w, const int h, const int samples, const int bounces)
+{
+	const int numThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 2);
+	std::vector<std::thread> threads;
+
+	std::cerr << "Ray-tracing using " << numThreads << " threads" << std::endl;
+
+	for (int t = 0; t != numThreads; ++t)
+	{
+		threads.emplace_back([=, &buffer, &cam, &world]()
+		{
+			singleThreadLoop(buffer, cam, world, w, h, samples, bounces, numThreads, t);
+		});
+	}
+
+	for (auto& thread : threads)
+	{
+		thread.join();
+	}
+}
+
 int main(int argc, char* argv[])
 {
 	const auto aspectRatio = 16.0f / 9.0f;
-	const size_t imageWidth = 1200u;
+	const size_t imageWidth = 1920u;
 	const size_t imageHeight = static_cast<size_t>(imageWidth/aspectRatio);
-	constexpr size_t kNumSamples = 10;
-	constexpr size_t maxDepth = 50;
+	constexpr size_t kNumSamples = 1024;
+	constexpr size_t maxDepth = 16;
 
 	Framebuffer framebuffer{ imageWidth, imageHeight };
 	vec3 lookfrom(13.0f, 2.0f, 3.0f);
@@ -100,10 +148,10 @@ int main(int argc, char* argv[])
 	Camera camera{vec3(13.0f,2.0f,3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), 20.0f, aspectRatio, aperture, distToFocus};
 
 	// World
-	HittableList world;
-	world = randomScene();
-
-	for (size_t row = 0u; row < framebuffer.height(); row++)
+	const HittableList world = randomScene();
+	
+	//Single Thread
+	/*for (size_t row = 0u; row < framebuffer.height(); row++)
 	{
 		for (size_t col = 0u; col < framebuffer.width(); col++)
 		{
@@ -121,6 +169,32 @@ int main(int argc, char* argv[])
 				(uint8_t)(255.99f * sqrt(c.z())));
 		}
 	}
-	framebuffer.saveToFile("C:\\dev\\RayTracer\\image.tga");
+	framebuffer.saveToFile("C:\\dev\\RayTracer\\image.tga");*/
+	
+	//MultiThread
+	std::vector<vec3> buffer(imageWidth * imageHeight);
+	try
+	{
+		multiThreadLoop(buffer, camera, world, imageWidth, imageHeight, kNumSamples, maxDepth);
+		for (size_t row = 0u; row < framebuffer.height(); row++)
+		{
+			for (size_t col = 0u; col < framebuffer.width(); col++)
+			{
+				const vec3 pixelColor = buffer[row * imageWidth + col];
+				framebuffer.setPixel(row, col, (uint8_t)pixelColor.x(), (uint8_t)pixelColor.y(), (uint8_t)pixelColor.z());
+			}
+		}
+		framebuffer.saveToFile("C:\\dev\\RayTracer\\image.tga");
+	}
+	catch (const std::exception& exception)
+	{
+		std::cerr << "ERROR: " << exception.what() << std::endl;
+	}
+
+	catch (...)
+	{
+		std::cerr << "ERROR: unhandled exception" << std::endl;
+	}
+
 	return 0;
 }

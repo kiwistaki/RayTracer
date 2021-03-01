@@ -11,6 +11,8 @@
 
 #include <thread>
 #include <functional>
+#include <chrono>
+#include <cmath>
 
 /**
 * Cast a ray into the scene and determine color
@@ -52,13 +54,13 @@ HittableList randomScene()
 			if ((center - vec3(4.0f, 0.2f, 0.0f)).length() > 0.9f) {
 				std::shared_ptr<Material> sphereMaterial;
 
-				if (chooseMat < 0.8f) {
+				if (chooseMat < 0.4f) {
 					// diffuse
 					auto albedo = vec3::random() * vec3::random();
 					sphereMaterial = std::make_shared<Lambertian>(albedo);
 					world.add(std::make_shared<Sphere>(center, 0.2f, sphereMaterial));
 				}
-				else if (chooseMat < 0.95f) {
+				else if (chooseMat < 0.8f) {
 					// metal
 					auto albedo = vec3::random(0.5f, 1.0f);
 					auto fuzz = randf(0.0f, 0.5f);
@@ -149,6 +151,8 @@ int main(int argc, char* argv[])
 
 	// World
 	const HittableList world = randomScene();
+
+	auto start = std::chrono::high_resolution_clock::now();
 	
 	//Single Thread
 	/*for (size_t row = 0u; row < framebuffer.height(); row++)
@@ -194,6 +198,19 @@ int main(int argc, char* argv[])
 	catch (...)
 	{
 		std::cerr << "ERROR: unhandled exception" << std::endl;
+	}
+
+	auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end - start;
+	if (elapsed_seconds.count() < 60)
+	{
+		std::cerr << "elapsed time: " << elapsed_seconds.count() << "s" << std::endl;
+	}
+	else
+	{
+		int minutes = (int)(elapsed_seconds.count() / 60);
+		int seconds = (int)(std::fmod(elapsed_seconds.count(), 60));
+		std::cerr << "elapsed time: " << minutes << "min " << seconds << "s" << std::endl;
 	}
 
 	return 0;
